@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Attendance Late Counter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#6a737d;--bd:#d9dee3;--ac:#2563eb;--late:#b45309;--half:#b91c1c;--ok:#15803d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1318;--card:#181e26;--tx:#e8ecf0;--mut:#98a2ad;--bd:#2c3540;--ac:#6ea0ff;--late:#f5b25b;--half:#ff8a8a;--ok:#5fd08a;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI","Khmer OS Battambang","Noto Sans Khmer",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 14px}
+section{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px}
+label{font-size:13px;color:var(--mut);display:block;margin-bottom:3px}
+input,textarea,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 9px}
+button{background:var(--ac);color:#fff;border:0;cursor:pointer}
+button.sec{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.scroll{overflow-x:auto;max-height:340px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:5px 9px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--card);font-size:13px;color:var(--mut)}
+.late{color:var(--late);font-weight:600}.half{color:var(--half);font-weight:600}.ok{color:var(--ok)}
+tr.sum{cursor:pointer}tr.sum:hover{background:var(--bg)}
+.note{color:var(--mut);font-size:13px;margin:6px 0 0}
+#msg{color:var(--half);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>ប្រព័ន្ធរាប់ការមកយឺតបុគ្គលិក (Attendance Late Counter)</h1>
+
+<section>
+<h2>ជំហាន 1: ជ្រើស File Fingerprint (.xls / .xlsx / .csv)</h2>
+<input type="file" id="file" accept=".xls,.xlsx,.csv">
+<p class="note" id="info">File ត្រូវមានជួរ No. (ID), Name, Date/Time។ ទិន្នន័យមិនចេញពី browser របស់អ្នកទេ។</p>
+<div id="msg"></div>
+</section>
+
+<section>
+<h2>ជំហាន 2: ម៉ោងចូលរបស់បុគ្គលិក (Shift)</h2>
+<div class="row">
+<div><label>ម៉ោងធម្មតា (ទាំងអស់)</label><input type="time" id="dw" value="07:00"></div>
+<div><label>ម៉ោងថ្ងៃសៅរ៍ (ទាំងអស់)</label><input type="time" id="ds" value="07:30"></div>
+<button class="sec" id="applyAll">ដាក់ទាំងអស់</button>
+<div><label>អនុញ្ញាតយឺត (នាទី)</label><input type="number" id="grace" value="10" min="0" style="width:80px"></div>
+<div><label>ក្រោយម៉ោងនេះ = Absent half day</label><input type="time" id="half" value="11:00"></div>
+</div>
+<p class="note">បន្ទាប់ពី "ដាក់ទាំងអស់" អ្នកអាចកែម៉ោងបុគ្គលិកម្នាក់ៗក្នុងតារាងខាងក្រោម (ឧ. ម្នាក់ចូល 6:00)។</p>
+<div class="scroll" style="margin-top:8px"><table id="shiftTbl"><thead><tr><th>ID</th><th>Name</th><th>ម៉ោងធម្មតា</th><th>ម៉ោងថ្ងៃសៅរ៍</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section>
+<h2>ជំហាន 3: ជ្រើសបុគ្គលិក និងរាប់</h2>
+<div class="row">
+<div style="flex:1;min-width:220px"><label>ID បុគ្គលិក (ច្រើននាក់បាន ដាក់ក្បៀស ឬដកឃ្លា ឧ. 4, 447, 457) ទទេ = ទាំងអស់</label><input id="ids" style="width:100%" placeholder="4, 447, 457"></div>
+<div><label>ពីថ្ងៃ</label><input type="date" id="from"></div>
+<div><label>ដល់ថ្ងៃ</label><input type="date" id="to"></div>
+<button id="go">រាប់</button>
+<button class="sec" id="csv">Download CSV</button>
+</div>
+</section>
+
+<section>
+<h2>លទ្ធផល (ចុចលើជួរដើម្បីមើលលម្អិតតាមថ្ងៃ)</h2>
+<div class="scroll" style="max-height:none"><table id="res"><thead><tr><th>ID</th><th>Name</th><th>ថ្ងៃមក</th><th>Late</th><th>នាទីយឺតសរុប</th><th>Absent half day</th></tr></thead><tbody></tbody></table></div>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let rows=[],emps={},shifts={},summary=[];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+
+function parseDT(v){
+  if(typeof v==="number"){const o=XLSX.SSF.parse_date_code(v);if(!o)return null;return{y:o.y,m:o.m,d:o.d,sec:o.H*3600+o.M*60+Math.round(o.S)};}
+  if(v instanceof Date){return{y:v.getFullYear(),m:v.getMonth()+1,d:v.getDate(),sec:v.getHours()*3600+v.getMinutes()*60+v.getSeconds()};}
+  const m=String(v||"").match(/(\d+)\/(\d+)\/(\d+)[ T]+(\d+):(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+  if(!m)return null;
+  let h=+m[4];const ap=(m[7]||"").toUpperCase();
+  if(ap==="PM"&&h<12)h+=12;if(ap==="AM"&&h===12)h=0;
+  return{y:+m[3],m:+m[1],d:+m[2],sec:h*3600+ +m[5]*60+(+m[6]||0)};
+}
+const tsec=s=>{const[a,b]=s.split(":");return a*3600+b*60};
+
+$("file").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;$("msg").textContent="";
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+    const data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+    const hd=data[0].map(x=>String(x).trim().toLowerCase());
+    let ci=hd.indexOf("no."),ni=hd.indexOf("name"),di=hd.findIndex(x=>x.startsWith("date"));
+    if(ci<0)ci=hd.findIndex(x=>x==="no"||x==="id");
+    if(ci<0||ni<0||di<0)throw new Error("រកមិនឃើញជួរ No. / Name / Date/Time ក្នុង File");
+    rows=[];emps={};let bad=0;
+    for(let i=1;i<data.length;i++){
+      const r=data[i];if(r[ci]===""||r[ci]==null)continue;
+      const t=parseDT(r[di]);if(!t){bad++;continue;}
+      const id=String(r[ci]).trim();
+      const dow=new Date(Date.UTC(t.y,t.m-1,t.d)).getUTCDay();
+      rows.push({id,date:`${t.y}-${pad(t.m)}-${pad(t.d)}`,sec:t.sec,dow});
+      emps[id]=String(r[ni]).trim();
+    }
+    $("info").textContent=`បានអាន ${rows.length} ការស្កេន, បុគ្គលិក ${Object.keys(emps).length} នាក់`+(bad?` (រំលង ${bad} ជួរដែលអានម៉ោងមិនបាន)`:"");
+    buildShift(true);
+  }catch(err){$("msg").textContent="Error: "+err.message}
+});
+
+function buildShift(reset){
+  const tb=$("shiftTbl").tBodies[0];
+  const ids=Object.keys(emps).sort((a,b)=>a-b);
+  if(reset)ids.forEach(id=>{if(!shifts[id])shifts[id]={w:$("dw").value,s:$("ds").value}});
+  tb.innerHTML=ids.map(id=>`<tr><td>${esc(id)}</td><td>${esc(emps[id])}</td><td><input type="time" data-id="${esc(id)}" data-k="w" value="${shifts[id].w}"></td><td><input type="time" data-id="${esc(id)}" data-k="s" value="${shifts[id].s}"></td></tr>`).join("");
+}
+$("shiftTbl").addEventListener("change",e=>{const t=e.target;if(t.dataset.id)shifts[t.dataset.id][t.dataset.k]=t.value});
+$("applyAll").onclick=()=>{Object.keys(emps).forEach(id=>shifts[id]={w:$("dw").value,s:$("ds").value});buildShift(false)};
+
+function compute(){
+  const sel=$("ids").value.split(/[\s,;]+/).filter(Boolean);
+  const from=$("from").value,to=$("to").value;
+  const grace=+$("grace").value||0,halfSec=tsec($("half").value);
+  const first={};
+  rows.forEach(r=>{
+    if(sel.length&&!sel.includes(r.id))return;
+    if(from&&r.date<from)return;if(to&&r.date>to)return;
+    const k=r.id+"|"+r.date;
+    if(!first[k]||r.sec<first[k].sec)first[k]=r;
+  });
+  const by={};
+  Object.values(first).forEach(r=>{
+    const sh=shifts[r.id]||{w:$("dw").value,s:$("ds").value};
+    const shiftSec=tsec(r.dow===6?sh.s:sh.w);
+    let st="OK",lm=0;
+    if(r.sec>=halfSec)st="Absent half day";
+    else if(r.sec>shiftSec+grace*60+59){st="Late";lm=Math.floor(r.sec/60)-shiftSec/60;}
+    (by[r.id]=by[r.id]||[]).push({date:r.date,dow:r.dow,sec:r.sec,shift:shiftSec,st,lm});
+  });
+  const ids=sel.length?sel.filter(i=>emps[i]!==undefined||by[i]):Object.keys(by);
+  const missing=sel.filter(i=>emps[i]===undefined);
+  summary=[...new Set(ids)].sort((a,b)=>a-b).map(id=>{
+    const d=(by[id]||[]).sort((a,b)=>a.date.localeCompare(b.date));
+    return{id,name:emps[id]||"?",days:d.length,late:d.filter(x=>x.st==="Late").length,lateMin:d.reduce((s,x)=>s+x.lm,0),half:d.filter(x=>x.st==="Absent half day").length,detail:d};
+  });
+  return missing;
+}
+const hm=s=>`${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+const DN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+$("go").onclick=()=>{
+  if(!rows.length){$("msg").textContent="សូមជ្រើស File សិន";return}
+  const missing=compute();
+  $("msg").textContent=missing.length?"រកមិនឃើញ ID: "+missing.join(", "):"";
+  const tb=$("res").tBodies[0];
+  tb.innerHTML=summary.map((s,i)=>`<tr class="sum" data-i="${i}"><td>${esc(s.id)}</td><td>${esc(s.name)}</td><td>${s.days}</td><td class="late">${s.late}</td><td>${s.lateMin}</td><td class="half">${s.half}</td></tr>`).join("")||`<tr><td colspan="6">គ្មានទិន្នន័យ</td></tr>`;
+};
+$("res").addEventListener("click",e=>{
+  const tr=e.target.closest("tr.sum");if(!tr)return;
+  const nx=tr.nextElementSibling;
+  if(nx&&nx.classList.contains("det")){nx.remove();return}
+  const s=summary[+tr.dataset.i];
+  const inner=`<table><tr><th>Date</th><th>Day</th><th>ស្កេនដំបូង</th><th>ម៉ោងចូល</th><th>លទ្ធផល</th></tr>`+s.detail.map(d=>`<tr><td>${d.date}</td><td>${DN[d.dow]}</td><td>${hm(d.sec)}</td><td>${hm(d.shift)}</td><td class="${d.st==="Late"?"late":d.st==="OK"?"ok":"half"}">${d.st==="Late"?"Late +"+d.lm+" min":d.st}</td></tr>`).join("")+`</table>`;
+  const r=document.createElement("tr");r.className="det";r.innerHTML=`<td colspan="6">${inner}</td>`;tr.after(r);
+});
+$("csv").onclick=()=>{
+  if(!summary.length){$("msg").textContent="សូមចុច រាប់ សិន";return}
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`;
+  const out=["ID,Name,Days,Late,LateMinutes,AbsentHalfDay",...summary.map(s=>[s.id,q(s.name),s.days,s.late,s.lateMin,s.half].join(","))].join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+out],{type:"text/csv"}));a.download="late-summary.csv";a.click();
+};
+</script>
+</body>
+</html>
