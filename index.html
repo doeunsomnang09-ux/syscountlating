@@ -25,6 +25,7 @@ th,td{padding:5px 9px;border-bottom:1px solid var(--bd);text-align:left;white-sp
 th{position:sticky;top:0;background:var(--card);font-size:13px;color:var(--mut)}
 .late{color:var(--late);font-weight:600}.half{color:var(--half);font-weight:600}.ok{color:var(--ok)}
 tr.sum{cursor:pointer}tr.sum:hover{background:var(--bg)}
+tr.sun td{color:var(--half)!important;font-weight:600}
 .note{color:var(--mut);font-size:13px;margin:6px 0 0}
 #msg{color:var(--half);font-size:14px}
 </style>
@@ -162,7 +163,7 @@ $("res").addEventListener("click",e=>{
   const nx=tr.nextElementSibling;
   if(nx&&nx.classList.contains("det")){nx.remove();return}
   const s=summary[+tr.dataset.i];
-  const inner=`<table><tr><th>Date</th><th>Day</th><th>ស្កេនដំបូង</th><th>ម៉ោងចូល</th><th>លទ្ធផល</th></tr>`+s.detail.map(d=>`<tr><td>${d.date}</td><td>${DN[d.dow]}</td><td>${hm(d.sec)}</td><td>${hm(d.shift)}</td><td class="${d.st==="Late"?"late":d.st==="OK"?"ok":"half"}">${d.st==="Late"?"Late +"+d.lm+" min":d.st}</td></tr>`).join("")+`</table>`;
+  const inner=`<table><tr><th>Date</th><th>Day</th><th>ស្កេនដំបូង</th><th>ម៉ោងចូល</th><th>លទ្ធផល</th></tr>`+s.detail.map(d=>`<tr class="${d.dow===0?"sun":""}"><td>${d.date}</td><td>${DN[d.dow]}</td><td>${hm(d.sec)}</td><td>${hm(d.shift)}</td><td class="${d.st==="Late"?"late":d.st==="OK"?"ok":"half"}">${d.st==="Late"?"Late +"+d.lm+" min":d.st}</td></tr>`).join("")+`</table>`;
   const r=document.createElement("tr");r.className="det";r.innerHTML=`<td colspan="6">${inner}</td>`;tr.after(r);
 });
 $("csv").onclick=()=>{
